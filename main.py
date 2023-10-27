@@ -1,13 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, WebSocket
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import asyncio
 import random
 
 
-class SensorManager:
+class ControlServer:
     def __init__(self) -> None:
         self.read_count = 0
         self.websockets: set[WebSocket] = set()
@@ -17,7 +14,7 @@ class SensorManager:
         for index in range(3):
             sensors.append(
                 {
-                    "name": f"Sensor {index}",
+                    "id": f"Sensor {index}",
                 }
             )
 
@@ -28,28 +25,31 @@ class SensorManager:
         await websocket.send_json(self.sensor_metadata())
         self.websockets.add(websocket)
 
-    async def read_and_broadcast(self):
-        data = []
-        if True:  # TODO: get real data
-            for index in range(3):
-                data.append([self.read_count, random.random()])
+    async def broadcast_msgs(self):
+        while True:
+            data = {}
+            if True:  # TODO: get real data
+                for index in range(3):
+                    data[f"Sensor {index}"] = [self.read_count, random.random()]
+
                 await asyncio.sleep(1)
-        else:
-            raise NotImplementedError("Real data readings not implemented yet")
+            else:
+                raise NotImplementedError("Real data readings not implemented yet")
 
-        msg = {"type": "data", "data": data}
-        for websocket in self.websockets:
-            await websocket.send_json(msg)
+            msg = {"type": "data", "data": data}
+            for websocket in self.websockets:
+                await websocket.send_json(msg)
 
-        self.read_count += 1
+            self.read_count += 1
 
-    async def read_and_broadcast_loop(self):
+    async def receive_msg(self, socket: WebSocket):
         try:
             while True:
-                await self.read_and_broadcast()
+                msg = await socket.receive_json()
+                print(msg)
 
-        except asyncio.CancelledError:
-            self.close_all()
+        except WebSocketDisconnect:
+            self.websockets.remove(socket)
 
     async def close_all(self):
         for websocket in self.websockets:
@@ -58,28 +58,21 @@ class SensorManager:
         self.websockets.clear()
 
 
-manager = SensorManager()
+manager = ControlServer()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    broadcast_task = asyncio.create_task(manager.read_and_broadcast_loop())
+    broadcast_task = asyncio.create_task(manager.broadcast_msgs())
     yield
     broadcast_task.cancel()
+    manager.close_all()
 
 
 app = FastAPI(lifespan=lifespan)
-templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-@app.get("/", response_class=HTMLResponse)
-async def show_live_sensors(request: Request):
-    return templates.TemplateResponse("live.html", {"request": request})
-
-
-@app.websocket("/live/ws")
+@app.websocket("/ws")
 async def live_websocket(websocket: WebSocket):
     await manager.connect_websocket(websocket)
-    while True:
-        await websocket.receive_json()
+    await manager.receive_msg(websocket)
