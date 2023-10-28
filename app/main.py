@@ -1,10 +1,14 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import random
 import os
-import uuid
 from io import TextIOWrapper
+from .models import Recording
+from sqlmodel import Session
+from .routers import recordings
+from .database import engine
 
 
 class ControlServer:
@@ -71,11 +75,17 @@ class ControlServer:
                     if self.recording_file is not None:
                         continue
 
-                    id = uuid.uuid4().hex
-                    self.recording_file = open(
-                        os.path.join("recordings", id + ".csv"), "w", buffering=1
-                    )
-                    self.recording_count = 0
+                    with Session(engine) as session:
+                        recording = Recording()
+                        session.add(recording)
+                        session.commit()
+
+                        self.recording_file = open(
+                            os.path.join("recordings", recording.id.hex + ".csv"),
+                            "w",
+                            buffering=1,
+                        )
+                        self.recording_count = 0
                     await self.update_status(recordingStatus=True)
 
                 elif msg["cmd"] == "stop-recording":
@@ -112,6 +122,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(recordings.router)
 
 
 @app.websocket("/ws")
