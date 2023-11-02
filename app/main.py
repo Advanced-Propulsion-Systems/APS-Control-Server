@@ -76,7 +76,7 @@ class ControlServer:
                         continue
 
                     with Session(engine) as session:
-                        recording = Recording()
+                        recording = Recording(name=msg["name"].strip())
                         session.add(recording)
                         session.commit()
 

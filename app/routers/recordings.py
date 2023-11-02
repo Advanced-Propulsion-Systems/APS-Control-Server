@@ -17,7 +17,14 @@ async def index_recordings(session: Session = Depends(get_session)) -> list[Reco
 
 @router.get("/{id}")
 async def download_recording(id: uuid.UUID, session: Session = Depends(get_session)):
-    return FileResponse(os.path.join("recordings", id.hex + ".csv"))
+    recording = session.get(Recording, id)
+    if recording.name is None:
+        recording.name = recording.created_at.isoformat()
+
+    return FileResponse(
+        path=os.path.join("recordings", id.hex + ".csv"),
+        filename=recording.name + ".csv",
+    )
 
 
 @router.delete("/{id}")
