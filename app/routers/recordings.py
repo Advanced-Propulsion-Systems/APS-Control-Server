@@ -27,6 +27,8 @@ async def download_recording(id: uuid.UUID, session: Session = Depends(get_sessi
     )
 
 
-@router.delete("/{id}")
+@router.delete("/{id}", status_code=204)
 async def delete_recording(id: uuid.UUID, session: Session = Depends(get_session)):
-    raise NotImplementedError
+    os.remove(os.path.join("recordings", id.hex + ".csv"))
+    session.delete(session.get(Recording, id))
+    session.commit()
