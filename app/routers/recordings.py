@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
-from sqlmodel import Session, select
+from sqlmodel import Session, select, desc
 import os
 import uuid
 from ..models import Recording
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/recordings")
 
 @router.get("/")
 async def index_recordings(session: Session = Depends(get_session)) -> list[Recording]:
-    data = session.exec(select(Recording)).all()
+    data = session.exec(select(Recording).order_by(desc(Recording.created_at))).all()
     return data
 
 
