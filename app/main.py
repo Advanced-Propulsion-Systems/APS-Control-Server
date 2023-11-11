@@ -18,29 +18,38 @@ class ControlServer:
 
         self.recording_file: TextIOWrapper | None = None
         self.recording_count = 0
+        self.data_queue: asyncio.Queue[dict] = asyncio.Queue()
+
+        self.sensors = ["Sens1", "sens2", "sens3"]
 
     def sensor_metadata(self):
-        sensors = []
-        for index in range(3):
-            sensors.append(
+        data = []
+        for name in self.sensors:
+            data.append(
                 {
-                    "id": f"Sensor {index}",
+                    "id": name,
                 }
             )
 
-        return {"type": "setup", "sensors": sensors}
+        return {"type": "setup", "sensors": data}
 
     async def connect_websocket(self, websocket: WebSocket):
         await websocket.accept()
         await websocket.send_json(self.sensor_metadata())
         self.websockets.add(websocket)
 
-    async def broadcast_msgs(self):
+    async def read_sensors(self):
         while True:
             data = {}
             if True:  # TODO: get real data
                 for index in range(3):
-                    data[f"Sensor {index}"] = [self.read_count, random.random()]
+                    data[index] = {
+                        "id": self.sensors[index],
+                        "time": self.read_count,
+                        "value": random.random(),
+                    }
+
+                    await self.data_queue.put(data[index])
 
                 await asyncio.sleep(1)
             else:
@@ -49,15 +58,16 @@ class ControlServer:
             if self.recording_file is not None:
                 self.recording_file.write(str(self.recording_count))
                 for key, value in data.items():
-                    self.recording_file.write("," + str(value[1]))
+                    self.recording_file.write("," + str(value["value"]))
                 self.recording_file.write("\n")
                 self.recording_count += 1
 
-            msg = {"type": "data", "data": data}
-            for websocket in self.websockets:
-                await websocket.send_json(msg)
-
             self.read_count += 1
+
+    async def broadcast_sensor_data(self):
+        while True:
+            data = await self.data_queue.get()
+            await self.broadcast_msg({"type": "data", "data": data})
 
     async def broadcast_msg(self, msg: dict):
         async with asyncio.TaskGroup() as tg:
@@ -115,10 +125,12 @@ manager = ControlServer()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     os.makedirs("recordings", exist_ok=True)
-    broadcast_task = asyncio.create_task(manager.broadcast_msgs())
+    sensor_reading_task = asyncio.create_task(manager.read_sensors())
+    broadcast_task = asyncio.create_task(manager.broadcast_sensor_data())
     yield
+    sensor_reading_task.cancel()
     broadcast_task.cancel()
-    manager.close_all()
+    await manager.close_all()
 
 
 app = FastAPI(lifespan=lifespan)
