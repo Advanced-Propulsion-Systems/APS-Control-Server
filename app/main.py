@@ -127,6 +127,9 @@ class ControlServer:
                 elif msg["cmd"] == "ignite":
                     raise NotImplementedError
 
+                elif msg["cmd"] == "toggle-relay":
+                    await self.toggle_relay(msg["id"], msg["state"])
+
         except WebSocketDisconnect:
             self.websockets.remove(socket)
 
@@ -135,6 +138,10 @@ class ControlServer:
             await websocket.close()
 
         self.websockets.clear()
+
+    async def toggle_relay(self, relay_id: int, state: bool) -> None:
+        self.serial_port.write({"cmd": "toggle-relay", id: relay_id, state: state})
+        # TODO await self.update_status(=True)
 
 
 manager = ControlServer()
