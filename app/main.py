@@ -4,11 +4,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import random
 import os
+import serial
 from io import TextIOWrapper
 from .models import Recording
 from sqlmodel import Session
 from .routers import recordings
 from .database import engine
+import json
 
 
 class ControlServer:
@@ -21,6 +23,7 @@ class ControlServer:
         self.data_queue: asyncio.Queue[dict] = asyncio.Queue()
 
         self.sensors = ["Sens1", "sens2", "sens3"]
+        self.serial_port = serial.Serial("/dev/ttyUSB0")
 
     def sensor_metadata(self):
         data = []
@@ -40,8 +43,25 @@ class ControlServer:
 
     async def read_sensors(self):
         while True:
-            data = {}
-            if True:  # TODO: get real data
+            data = [{}]
+            if os.getenv("DATA_SOURCE") != "fake":
+                if self.serial_port.in_waiting == 0:
+                    await asyncio.sleep(0)
+                    continue
+
+                data[0] = json.loads(self.serial_port.read_until())
+                if data[0]["type"] == "data":
+                    await self.data_queue.put(
+                        {
+                            "id": self.sensors[data[0]["id"]],
+                            "time": data[0]["time"] / 1000,
+                            "value": data[0]["value"],
+                        }
+                    )
+
+                await asyncio.sleep(0)
+
+            else:
                 for index in range(3):
                     data[index] = {
                         "id": self.sensors[index],
@@ -52,8 +72,6 @@ class ControlServer:
                     await self.data_queue.put(data[index])
 
                 await asyncio.sleep(1)
-            else:
-                raise NotImplementedError("Real data readings not implemented yet")
 
             if self.recording_file is not None:
                 self.recording_file.write(str(self.recording_count))
