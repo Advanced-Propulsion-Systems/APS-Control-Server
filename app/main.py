@@ -49,7 +49,13 @@ class ControlServer:
                     await asyncio.sleep(0)
                     continue
 
-                data[0] = json.loads(self.serial_port.read_until())
+                buffer = self.serial_port.read_until()
+                try:
+                    data[0] = json.loads(buffer)
+                except Exception:
+                    await asyncio.sleep(0)
+                    continue
+
                 if data[0]["type"] == "data":
                     await self.data_queue.put(
                         {
