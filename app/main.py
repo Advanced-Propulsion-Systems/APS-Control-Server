@@ -11,6 +11,9 @@ from sqlmodel import Session
 from .routers import recordings
 from .database import engine
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class ControlServer:
@@ -23,7 +26,9 @@ class ControlServer:
         self.data_queue: asyncio.Queue[dict] = asyncio.Queue()
 
         self.sensors = ["Sens1", "sens2", "sens3"]
-        self.serial_port = serial.Serial("/dev/ttyUSB0")
+
+        if os.getenv("DATA_SOURCE") != "fake":
+            self.serial_port = serial.Serial("/dev/ttyUSB0")
 
     def sensor_metadata(self):
         data = []
@@ -53,7 +58,7 @@ class ControlServer:
                 try:
                     data[0] = json.loads(buffer)
                 except Exception:
-                    await asyncio.sleep(0)
+                    await asyncio.sleep(0.1)
                     continue
 
                 if data[0]["type"] == "data":
@@ -68,12 +73,15 @@ class ControlServer:
                 await asyncio.sleep(0)
 
             else:
+                data = []
                 for index in range(3):
-                    data[index] = {
-                        "id": self.sensors[index],
-                        "time": self.read_count,
-                        "value": random.random(),
-                    }
+                    data.append(
+                        {
+                            "id": self.sensors[index],
+                            "time": self.read_count,
+                            "value": random.random(),
+                        }
+                    )
 
                     await self.data_queue.put(data[index])
 
@@ -136,7 +144,8 @@ class ControlServer:
                 elif msg["cmd"] == "toggle-relay":
                     await self.toggle_relay(msg["id"], msg["state"])
 
-        except WebSocketDisconnect:
+        except WebSocketDisconnect as e:
+            print("Disconnect websocket", e)
             self.websockets.remove(socket)
 
     async def close_all(self):
@@ -146,7 +155,10 @@ class ControlServer:
         self.websockets.clear()
 
     async def toggle_relay(self, relay_id: int, state: bool) -> None:
-        self.serial_port.write({"cmd": "toggle-relay", id: relay_id, state: state})
+        print(relay_id, state)
+        data = json.dumps({"cmd": "toggle-relay", "id": relay_id, "state": state})
+        encoded = str.encode(data)
+        self.serial_port.write(encoded)
         # TODO await self.update_status(=True)
 
 
