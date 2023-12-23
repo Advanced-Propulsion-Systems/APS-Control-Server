@@ -88,7 +88,7 @@ class ControlServer:
                 await asyncio.sleep(1)
 
             if self.recording_file is not None:
-                self.recording_file.write(str(self.recording_count))
+                self.recording_file.write(str(data[0]["time"]))
                 for value in data:
                     self.recording_file.write("," + str(value["value"]))
                 self.recording_file.write("\n")
