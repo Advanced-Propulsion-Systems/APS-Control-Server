@@ -89,7 +89,7 @@ class ControlServer:
 
             if self.recording_file is not None:
                 self.recording_file.write(str(self.recording_count))
-                for key, value in data.items():
+                for value in data:
                     self.recording_file.write("," + str(value["value"]))
                 self.recording_file.write("\n")
                 self.recording_count += 1
