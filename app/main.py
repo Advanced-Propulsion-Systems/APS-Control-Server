@@ -112,43 +112,38 @@ class ControlServer:
         await self.broadcast_msg({"type": "update-status", "changes": kwargs})
 
     async def receive_msg(self, socket: WebSocket):
-        try:
-            while True:
-                msg = await socket.receive_json()
-                if msg["cmd"] == "start-recording":
-                    if self.recording_file is not None:
-                        continue
+        while True:
+            msg = await socket.receive_json()
+            if msg["cmd"] == "start-recording":
+                if self.recording_file is not None:
+                    continue
 
-                    with Session(engine) as session:
-                        recording = Recording(name=msg["name"].strip())
-                        session.add(recording)
-                        session.commit()
+                with Session(engine) as session:
+                    recording = Recording(name=msg["name"].strip())
+                    session.add(recording)
+                    session.commit()
 
-                        self.recording_file = open(
-                            os.path.join("recordings", recording.id.hex + ".csv"),
-                            "w",
-                            buffering=1,
-                        )
-                        self.recording_count = 0
-                    await self.update_status(recordingStatus=True)
+                    self.recording_file = open(
+                        os.path.join("recordings", recording.id.hex + ".csv"),
+                        "w",
+                        buffering=1,
+                    )
+                    self.recording_count = 0
+                await self.update_status(recordingStatus=True)
 
-                elif msg["cmd"] == "stop-recording":
-                    if self.recording_file is None:
-                        continue
+            elif msg["cmd"] == "stop-recording":
+                if self.recording_file is None:
+                    continue
 
-                    self.recording_file.close()
-                    self.recording_file = None
-                    await self.update_status(recordingStatus=False)
+                self.recording_file.close()
+                self.recording_file = None
+                await self.update_status(recordingStatus=False)
 
-                elif msg["cmd"] == "ignite":
-                    raise NotImplementedError
+            elif msg["cmd"] == "ignite":
+                raise NotImplementedError
 
-                elif msg["cmd"] == "toggle-relay":
-                    await self.toggle_relay(msg["id"], msg["state"])
-
-        except WebSocketDisconnect as e:
-            print("Disconnect websocket", e)
-            self.websockets.remove(socket)
+            elif msg["cmd"] == "toggle-relay":
+                await self.toggle_relay(msg["id"], msg["state"])
 
     async def close_all(self):
         for websocket in self.websockets:
@@ -193,5 +188,12 @@ app.include_router(recordings.router)
 
 @app.websocket("/ws")
 async def live_websocket(websocket: WebSocket):
-    await manager.connect_websocket(websocket)
-    await manager.receive_msg(websocket)
+    try:
+        await manager.connect_websocket(websocket)
+        await manager.receive_msg(websocket)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if websocket in manager.websockets:
+            manager.websockets.remove(websocket)
+        print("Websocket disconnect")
