@@ -28,7 +28,9 @@ class ControlServer:
         self.sensors = ["Sens1", "sens2", "sens3"]
 
         if os.getenv("DATA_SOURCE") != "fake":
-            self.serial_port = serial.Serial("/dev/ttyUSB0")
+            self.serial_port = serial.Serial(os.getenv("DATA_SOURCE"))
+        else:
+            self.serial_port = None
 
     def sensor_metadata(self):
         data = []
@@ -49,7 +51,7 @@ class ControlServer:
     async def read_sensors(self):
         while True:
             data = [{}]
-            if os.getenv("DATA_SOURCE") != "fake":
+            if self.serial_port is not None:
                 if self.serial_port.in_waiting == 0:
                     await asyncio.sleep(0)
                     continue
