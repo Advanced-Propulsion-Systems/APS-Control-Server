@@ -1,0 +1,11 @@
+[Unit]
+Description=Uvicorn process
+After=network.target
+
+[Service]
+User=aps
+WorkingDirectory=/home/aps/APS-Control-Server
+ExecStart=/home/aps/APS-Control-Server/venv/bin/python -m uvicorn --app-dir /home/aps/APS-Control-Server/ app.main:app
+
+[Install]
+WantedBy=default.target
