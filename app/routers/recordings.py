@@ -16,6 +16,13 @@ async def index_recordings(session: Session = Depends(get_session)) -> list[Reco
 
 
 @router.get("/{id}")
+async def show_recording(
+    id: uuid.UUID, session: Session = Depends(get_session)
+) -> Recording:
+    return session.get(Recording, id)
+
+
+@router.get("/{id}/data")
 async def download_recording(id: uuid.UUID, session: Session = Depends(get_session)):
     recording = session.get(Recording, id)
     if recording.name is None:
