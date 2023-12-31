@@ -12,6 +12,7 @@ from .routers import recordings
 from .database import engine
 import json
 from dotenv import load_dotenv
+from csv import DictWriter
 
 load_dotenv()
 
@@ -22,6 +23,7 @@ class ControlServer:
         self.websockets: set[WebSocket] = set()
 
         self.recording_file: TextIOWrapper | None = None
+        self.csv_writer: DictWriter | None = None
         self.recording_count = 0
         self.data_queue: asyncio.Queue[dict] = asyncio.Queue()
 
@@ -90,10 +92,10 @@ class ControlServer:
                 await asyncio.sleep(1)
 
             if self.recording_file is not None:
-                self.recording_file.write(str(data[0]["time"]))
                 for value in data:
-                    self.recording_file.write("," + str(value["value"]))
-                self.recording_file.write("\n")
+                    self.csv_writer.writerow(
+                        {"time": value["time"], value["id"]: value["value"]}
+                    )
                 self.recording_count += 1
 
             self.read_count += 1
@@ -127,8 +129,13 @@ class ControlServer:
                         os.path.join("recordings", recording.id.hex + ".csv"),
                         "w",
                         buffering=1,
+                        newline="",
+                    )
+                    self.csv_writer = DictWriter(
+                        self.recording_file, ["time"] + self.sensors
                     )
                     self.recording_count = 0
+                    self.csv_writer.writeheader()
                 await self.update_status(recordingStatus=True)
 
             elif msg["cmd"] == "stop-recording":
@@ -137,6 +144,7 @@ class ControlServer:
 
                 self.recording_file.close()
                 self.recording_file = None
+                self.csv_writer = None
                 await self.update_status(recordingStatus=False)
 
             elif msg["cmd"] == "ignite":
