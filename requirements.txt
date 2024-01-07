@@ -2,5 +2,4 @@ fastapi
 uvicorn[standard]
 websockets
 sqlmodel
-pyserial
-bson
+pyserial-asyncio

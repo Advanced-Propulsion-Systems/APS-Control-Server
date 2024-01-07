@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import random
 import os
-import serial
+import serial_asyncio
 from io import TextIOWrapper
 from .models import Recording
 from sqlmodel import Session
@@ -29,10 +29,17 @@ class ControlServer:
 
         self.sensors = ["Sens1", "sens2", "sens3"]
 
+    async def configure(self):
         if os.getenv("DATA_SOURCE") != "fake":
-            self.serial_port = serial.Serial(os.getenv("DATA_SOURCE"))
+            (
+                self.serial_reader,
+                self.serial_writer,
+            ) = await serial_asyncio.open_serial_connection(
+                url=os.getenv("DATA_SOURCE")
+            )
+
         else:
-            self.serial_port = None
+            self.serial_reader, self.serial_writer = None, None
 
     def sensor_metadata(self):
         data = []
@@ -53,16 +60,12 @@ class ControlServer:
     async def read_sensors(self):
         while True:
             data = [{}]
-            if self.serial_port is not None:
-                if self.serial_port.in_waiting == 0:
-                    await asyncio.sleep(0)
-                    continue
-
-                buffer = self.serial_port.read_until()
+            if self.serial_reader is not None:
+                buffer = await self.serial_reader.read_until()
                 try:
                     data[0] = json.loads(buffer)
                 except Exception:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0)
                     continue
 
                 if data[0]["type"] == "data":
@@ -73,8 +76,6 @@ class ControlServer:
                             "value": data[0]["value"],
                         }
                     )
-
-                await asyncio.sleep(0)
 
             else:
                 data = []
@@ -163,7 +164,8 @@ class ControlServer:
         print(relay_id, state)
         data = json.dumps({"cmd": "toggle-relay", "id": relay_id, "state": state})
         encoded = str.encode(data)
-        self.serial_port.write(encoded)
+        self.serial_writer.write(encoded)
+        await self.serial_writer.drain()
         # TODO await self.update_status(=True)
 
 
@@ -173,6 +175,7 @@ manager = ControlServer()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     os.makedirs("recordings", exist_ok=True)
+    await manager.configure()
     sensor_reading_task = asyncio.create_task(manager.read_sensors())
     broadcast_task = asyncio.create_task(manager.broadcast_sensor_data())
     yield
