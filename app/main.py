@@ -59,47 +59,50 @@ class ControlServer:
 
     async def read_sensors(self):
         while True:
-            data = [{}]
-            if self.serial_reader is not None:
-                buffer = await self.serial_reader.readuntil()
-                try:
-                    data[0] = json.loads(buffer)
-                except Exception:
-                    await asyncio.sleep(0)
-                    continue
+            try:
+                data = [{}]
+                if self.serial_reader is not None:
+                    buffer = await self.serial_reader.readuntil()
+                    try:
+                        data[0] = json.loads(buffer)
+                    except Exception:
+                        await asyncio.sleep(0)
+                        continue
 
-                if data[0]["type"] == "data":
-                    await self.data_queue.put(
-                        {
-                            "id": self.sensors[data[0]["id"]],
-                            "time": data[0]["time"] / 1000,
-                            "value": data[0]["value"],
-                        }
-                    )
+                    if data[0]["type"] == "data":
+                        await self.data_queue.put(
+                            {
+                                "id": self.sensors[data[0]["id"]],
+                                "time": data[0]["time"] / 1000,
+                                "value": data[0]["value"],
+                            }
+                        )
 
-            else:
-                data = []
-                for index in range(3):
-                    data.append(
-                        {
-                            "id": self.sensors[index],
-                            "time": self.read_count,
-                            "value": random.random(),
-                        }
-                    )
+                else:
+                    data = []
+                    for index in range(3):
+                        data.append(
+                            {
+                                "id": self.sensors[index],
+                                "time": self.read_count,
+                                "value": random.random(),
+                            }
+                        )
 
-                    await self.data_queue.put(data[index])
+                        await self.data_queue.put(data[index])
 
-                await asyncio.sleep(1)
+                    await asyncio.sleep(1)
 
-            if self.recording_file is not None:
-                for value in data:
-                    self.csv_writer.writerow(
-                        {"time": value["time"], value["id"]: value["value"]}
-                    )
-                self.recording_count += 1
+                if self.recording_file is not None:
+                    for value in data:
+                        self.csv_writer.writerow(
+                            {"time": value["time"], value["id"]: value["value"]}
+                        )
+                    self.recording_count += 1
 
-            self.read_count += 1
+                self.read_count += 1
+            except Exception as e:
+                print("AAAAAAAAAAAAAAAAAAAAAAAAAA", e)
 
     async def broadcast_sensor_data(self):
         while True:
