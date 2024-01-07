@@ -61,7 +61,7 @@ class ControlServer:
         while True:
             data = [{}]
             if self.serial_reader is not None:
-                buffer = await self.serial_reader.read_until()
+                buffer = await self.serial_reader.readuntil()
                 try:
                     data[0] = json.loads(buffer)
                 except Exception:
